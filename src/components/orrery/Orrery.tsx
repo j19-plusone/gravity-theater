@@ -12,6 +12,18 @@ import {
   type PresetId,
 } from "@/lib/orrery/physics";
 import { SCENARIOS, applyScenario, type ScenarioId } from "@/lib/orrery/scenarios";
+import {
+  HTML_LANG,
+  LANGS,
+  LANG_CODE,
+  LANG_NAME,
+  STRINGS,
+  presetLabel,
+  readLang,
+  scenarioLabel,
+  scenarioTitle,
+  type Lang,
+} from "@/lib/orrery/i18n";
 import { makeStarfield, renderScene, type Aim, type Camera } from "@/components/orrery/draw";
 
 type Stats = { n: number; energy: string; mass: string | null; speed: string | null };
@@ -52,6 +64,8 @@ export function Orrery() {
   const [selected, setSelected] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [stats, setStats] = useState<Stats>({ n: 7, energy: "—", mass: null, speed: null });
+  const [lang, setLang] = useState<Lang>("zh");
+  const t = STRINGS[lang];
 
   const presetRef = useRef(PRESETS[2]);
   const speedRef = useRef(speed);
@@ -59,6 +73,7 @@ export function Orrery() {
   const selectedRef = useRef<number | null>(null);
   const collisionRef = useRef(collision);
   const trailsRef = useRef(trails);
+  const langRef = useRef<Lang>("zh");
   const actions = useRef<{ scenario?: (id: ScenarioId) => void; clear?: () => void }>({});
 
   presetRef.current = PRESETS.find((p) => p.id === preset) ?? PRESETS[2];
@@ -67,6 +82,27 @@ export function Orrery() {
   selectedRef.current = selected;
   collisionRef.current = collision;
   trailsRef.current = trails;
+  langRef.current = lang;
+
+  useEffect(() => {
+    setLang(readLang());
+  }, []);
+
+  const skipLangSave = useRef(true);
+  useEffect(() => {
+    document.documentElement.lang = HTML_LANG[lang];
+    document.title = STRINGS[lang].appName;
+    document.querySelector('meta[name="description"]')?.setAttribute("content", STRINGS[lang].description);
+    if (skipLangSave.current) {
+      skipLangSave.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem("orrery-lang", lang);
+    } catch {
+      /* ignore */
+    }
+  }, [lang]);
 
   useEffect(() => {
     const saved = readSaved();
@@ -311,10 +347,10 @@ export function Orrery() {
         const events = world.events.splice(0, world.events.length);
         if (events.includes("sling")) {
           tone("sling");
-          toastMsg("弹弓加速");
+          toastMsg(STRINGS[langRef.current].toastSling);
         } else if (events.includes("merge")) {
           tone("merge");
-          toastMsg("并合");
+          toastMsg(STRINGS[langRef.current].toastMerge);
         }
       }
       if (mode === "aim") refreshAim();
@@ -490,7 +526,7 @@ export function Orrery() {
         });
         aim = null;
         mode = "none";
-        if (!body) toastMsg("天体太多了");
+        if (!body) toastMsg(STRINGS[langRef.current].toastFull);
         else {
           tone("launch");
           setSelected(body.id);
@@ -591,18 +627,18 @@ export function Orrery() {
         ref={canvasRef}
         className="sky absolute inset-0 h-full w-full"
         role="application"
-        aria-label="重力模拟星图，拖拽抛出天体"
+        aria-label={t.canvas}
       />
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between px-4 pt-4 md:hidden">
         <div>
           <p className="font-display text-xs tracking-widest text-amber">ORRERY</p>
-          <h1 className="text-xl font-medium leading-tight">引力剧场</h1>
+          <h1 className="text-xl font-medium leading-tight">{t.appName}</h1>
         </div>
         <div className="text-right text-sm text-mute">
           <div>
-            <span className="tabular-nums text-paper">{stats.n}</span> 天体
+            <span className="tabular-nums text-paper">{stats.n}</span> {t.bodies}
           </div>
-          {paused ? <div className="text-amber">已暂停</div> : null}
+          {paused ? <div className="text-amber">{t.paused}</div> : null}
         </div>
       </header>
       {toast ? (
@@ -612,30 +648,55 @@ export function Orrery() {
       ) : null}
       {stats.n === 0 ? (
         <p className="pointer-events-none absolute top-1/4 left-1/2 z-10 w-64 -translate-x-1/2 text-center text-sm text-mute md:top-1/3">
-          在虚空里按住，拖出一颗天体
+          {t.empty}
         </p>
       ) : null}
       <aside
         data-dock
-        className="dock absolute inset-x-3 bottom-3 z-10 flex flex-col gap-3 rounded-2xl border border-line bg-ink/85 p-3 backdrop-blur-md md:inset-y-4 md:right-auto md:bottom-4 md:left-4 md:w-80 md:overflow-y-auto"
+        className="dock absolute inset-x-3 bottom-3 z-10 flex max-h-[58dvh] flex-col gap-3 overflow-y-auto rounded-2xl border border-line bg-ink/85 p-3 backdrop-blur-md md:inset-y-4 md:right-auto md:bottom-4 md:left-4 md:max-h-none md:w-80"
       >
         <div className="hidden md:block">
           <p className="font-display text-xs tracking-widest text-amber">ORRERY</p>
           <div className="flex items-baseline justify-between gap-3">
-            <h1 className="text-2xl font-medium">引力剧场</h1>
-            {paused ? <span className="text-xs text-amber">已暂停</span> : null}
+            <h1 className="text-2xl font-medium">{t.appName}</h1>
+            {paused ? <span className="text-xs text-amber">{t.paused}</span> : null}
           </div>
-          <p className="mt-1 text-sm text-mute">抛出行星，看它们互相牵住。</p>
+          <p className="mt-1 text-sm text-mute">{t.tagline}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-xs text-mute">{t.language}</span>
+          <div className="flex min-w-0 flex-1 gap-1" role="group" aria-label={t.language}>
+            {LANGS.map((id) => {
+              const on = lang === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={LANG_NAME[id]}
+                  title={LANG_NAME[id]}
+                  onClick={() => setLang(id)}
+                  className={
+                    on
+                      ? "h-9 min-w-0 flex-1 rounded-full bg-tide text-xs font-medium text-void"
+                      : "h-9 min-w-0 flex-1 rounded-full border border-line text-xs text-paper"
+                  }
+                >
+                  {LANG_CODE[id]}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div className="flex items-center justify-between text-sm text-mute">
           <span>
-            天体 <span className="tabular-nums text-paper">{stats.n}</span>
+            {t.bodies} <span className="tabular-nums text-paper">{stats.n}</span>
           </span>
           <span>
-            能量 <span className="tabular-nums text-paper">{stats.energy}</span>
+            {t.energy} <span className="tabular-nums text-paper">{stats.energy}</span>
           </span>
         </div>
-        <div className="flex gap-1.5" role="group" aria-label="质量预设">
+        <div className="chiprow" role="group" aria-label={t.massPresets}>
           {PRESETS.map((p) => {
             const on = preset === p.id;
             return (
@@ -646,11 +707,11 @@ export function Orrery() {
                 onClick={() => setPreset(p.id)}
                 className={
                   on
-                    ? "h-11 min-w-0 flex-1 rounded-full bg-amber text-sm font-medium text-void"
-                    : "h-11 min-w-0 flex-1 rounded-full border border-line text-sm text-paper"
+                    ? "h-11 shrink-0 rounded-full bg-amber px-3 text-sm font-medium text-void"
+                    : "h-11 shrink-0 rounded-full border border-line px-3 text-sm text-paper"
                 }
               >
-                {p.label}
+                {presetLabel(lang, p.id)}
               </button>
             );
           })}
@@ -658,7 +719,7 @@ export function Orrery() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            aria-label={paused ? "继续" : "暂停"}
+            aria-label={paused ? t.resume : t.pause}
             aria-pressed={paused}
             onClick={() => setPaused((v) => !v)}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-amber text-void"
@@ -667,7 +728,7 @@ export function Orrery() {
           </button>
           <label className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex justify-between text-xs text-mute">
-              <span>时间</span>
+              <span>{t.time}</span>
               <span className="tabular-nums text-paper">{speed.toFixed(2)}×</span>
             </span>
             <input
@@ -676,50 +737,50 @@ export function Orrery() {
               max={3}
               step={0.05}
               value={speed}
-              aria-label="时间尺度"
+              aria-label={t.timeScale}
               onChange={(e) => setSpeed(Number(e.target.value))}
             />
           </label>
         </div>
         {stats.mass ? (
           <p className="text-sm text-mute">
-            质量 <span className="tabular-nums text-paper">{stats.mass}</span>
+            {t.mass} <span className="tabular-nums text-paper">{stats.mass}</span>
             <span className="px-2">·</span>
-            速率 <span className="tabular-nums text-paper">{stats.speed}</span>
+            {t.speed} <span className="tabular-nums text-paper">{stats.speed}</span>
           </p>
         ) : null}
         <div className="grid grid-cols-3 gap-2">
           <button type="button" aria-pressed={trails} onClick={() => setTrails((v) => !v)} className={chip(trails)}>
-            轨迹
+            {t.trails}
           </button>
           <button type="button" aria-pressed={collision === "merge"} onClick={() => setCollision("merge")} className={chip(collision === "merge")}>
-            合并
+            {t.merge}
           </button>
           <button type="button" aria-pressed={collision === "bounce"} onClick={() => setCollision("bounce")} className={chip(collision === "bounce")}>
-            弹开
+            {t.bounce}
           </button>
         </div>
         <div className="grid grid-cols-3 gap-2">
           <button type="button" onClick={onClear} className={chip(false)}>
             <Trash2 size={15} />
-            清除
+            {t.clear}
           </button>
           <button type="button" onClick={() => apiRef.current?.frame()} className={chip(false)}>
             <Focus size={15} />
-            取景
+            {t.frame}
           </button>
           <button type="button" disabled={selected == null} onClick={removeSelected} className={chip(false)}>
-            移除
+            {t.remove}
           </button>
         </div>
-        <div className="chiprow" role="group" aria-label="轨道编排">
+        <div className="chiprow" role="group" aria-label={t.scenarios}>
           {SCENARIOS.map((s) => {
             const on = scenario === s.id;
             return (
               <button
                 key={s.id}
                 type="button"
-                title={s.title}
+                title={scenarioTitle(lang, s.id)}
                 aria-pressed={on}
                 onClick={() => runScenario(s.id)}
                 className={
@@ -728,13 +789,13 @@ export function Orrery() {
                     : "h-11 shrink-0 rounded-full border border-line px-3 text-sm text-paper"
                 }
               >
-                {s.label}
+                {scenarioLabel(lang, s.id)}
               </button>
             );
           })}
         </div>
-        <p className="hint-fine text-xs leading-relaxed text-mute">空白拖拽抛出 · 按住天体改道 · 滚轮缩放 · 右键平移</p>
-        <p className="hint-coarse text-xs leading-relaxed text-mute">空白拖拽抛出 · 按住天体改道 · 双指缩放与平移</p>
+        <p className="hint-fine text-xs leading-relaxed text-mute">{t.hintFine}</p>
+        <p className="hint-coarse text-xs leading-relaxed text-mute">{t.hintCoarse}</p>
       </aside>
     </main>
   );
@@ -742,6 +803,6 @@ export function Orrery() {
 
 function chip(on: boolean) {
   return on
-    ? "inline-flex h-11 items-center justify-center gap-1 rounded-full bg-amber text-sm font-medium text-void"
-    : "inline-flex h-11 items-center justify-center gap-1 rounded-full border border-line text-sm text-paper disabled:opacity-40";
+    ? "inline-flex h-11 items-center justify-center gap-1 rounded-full bg-amber px-1 text-center text-xs font-medium leading-tight text-void"
+    : "inline-flex h-11 items-center justify-center gap-1 rounded-full border border-line px-1 text-center text-xs leading-tight text-paper disabled:opacity-40";
 }
